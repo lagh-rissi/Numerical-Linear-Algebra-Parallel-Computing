@@ -33,10 +33,11 @@ def matrixVectorMult(A, b, x):
 ########################initialize matrix A and vector b ######################
 #matrix sizes
 SIZE = 1000
-#Local_size = 
+Local_size = SIZE//nbOfproc
 
 # counts = block of each proc
-#counts = 
+counts = [Local_size for i in range(nbOfproc)]
+displacements = [i*Local_size for i in range(nbOfproc)]
 
 if RANK == 0:
     A = lil_matrix((SIZE, SIZE))
@@ -52,11 +53,14 @@ else :
 
 
 #########Send b to all procs and scatter A (each proc has its own local matrix#####
-#LocalMatrix = 
+b = COMM.bcast(b, root=0)
+LocalMatrix = np.zeros((Local_size, SIZE))
 # Scatter the matrix A
+COMM.Scatterv([A, counts, displacements, MPI.DOUBLE], LocalMatrix, root=0)
 
 #####################Compute A*b locally#######################################
-#LocalX = 
+LocalX = np.zeros(Local_size)
+matrixVectorMult(LocalMatrix, b, LocalX)
 
 start = MPI.Wtime()
 matrixVectorMult(LocalMatrix, b, LocalX)
@@ -66,13 +70,13 @@ if RANK == 0:
 
 ##################Gather te results ###########################################
 # sendcouns = local size of result
-#sendcounts = 
-# if RANK == 0: 
-#     X = ...
-# else :
-#     X = ..
-
+sendcounts = counts[RANK]
+if RANK == 0:
+    X = np.zeros(SIZE, dtype=np.float64)
+else:
+    X = None
 # Gather the result into X
+COMM.Gatherv(LocalX, [X, sendcounts, np.arange(nbOfproc, dtype=np.int32) * local_size, MPI.DOUBLE], root=0)
 
 
 ##################Print the results ###########################################
@@ -80,5 +84,5 @@ if RANK == 0:
 if RANK == 0 :
     X_ = A.dot(b)
     print("The result of A*b using dot is :", np.max(X_ - X))
-    # print("The result of A*b using parallel version is :", X)
+    print("The result of A*b using parallel version is :", X)
     
